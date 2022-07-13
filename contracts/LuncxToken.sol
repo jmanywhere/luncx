@@ -166,7 +166,7 @@ contract LuncxToken is Ownable, ERC20 {
         uint256 amount
     ) internal override {
         require(!blacklist[from] && !blacklist[to], "Blacklisted address");
-        pinkAntiBot.onPreTransferCheck(sender, recipient, amount);
+        pinkAntiBot.onPreTransferCheck(from, to, amount);
         if (amount == 0) {
             super._transfer(from, to, 0);
             return;
