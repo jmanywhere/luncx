@@ -1,15 +1,17 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity ^0.8.15;
+pragma solidity 0.8.15;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/ERC20Burnable.sol";
 import "../interfaces/IUniswapV2Router02.sol";
 import "../interfaces/IUniswapV2Factory.sol";
+import "../interfaces/IPinkAntiBot.sol";
 import "./LUNCDividendTracker.sol";
 
 contract LuncxToken is Ownable, ERC20 {
+    IPinkAntiBot public pinkAntiBot;
     // Fee Percentages
     uint256 public burnFee;
     uint256 public luncFee;
@@ -20,9 +22,9 @@ contract LuncxToken is Ownable, ERC20 {
     uint256 public rewardsAmount;
     uint256 public marketingAmount;
     // Global amounts sent
-    uint public marketingBnb;
-    uint public lunaBurned;
-    uint public lunaRewarded;
+    uint256 public marketingBnb;
+    uint256 public lunaBurned;
+    uint256 public lunaRewarded;
     // use by default 300,000 gas to process auto-claiming dividends
     uint256 public gasForProcessing = 300_000;
     // Constants
@@ -33,8 +35,10 @@ contract LuncxToken is Ownable, ERC20 {
     address public constant deadWallet =
         0x000000000000000000000000000000000000dEaD;
 
-    address public immutable LUNC = address(0x156ab3346823B651294766e23e6Cf87254d68962);
-    address public immutable dev = address(0xdB70A0771a1d070FeDFe781f8f156b09CA3feEa6);
+    address public immutable LUNC =
+        address(0x156ab3346823B651294766e23e6Cf87254d68962);
+    address public immutable dev =
+        address(0xdB70A0771a1d070FeDFe781f8f156b09CA3feEa6);
 
     uint256 public endAntiDump;
 
@@ -56,11 +60,7 @@ contract LuncxToken is Ownable, ERC20 {
         uint256 indexed oldValue
     );
 
-    event UpdatedFees(
-        uint256 _burn,
-        uint256 _reward,
-        uint256 _marketing
-    );
+    event UpdatedFees(uint256 _burn, uint256 _reward, uint256 _marketing);
     event UpdateDividendTracker(
         address indexed newAddress,
         address indexed oldAddress
@@ -79,14 +79,18 @@ contract LuncxToken is Ownable, ERC20 {
         address indexed processor
     );
 
-    constructor(address _marketing) ERC20("LUNCX", "LUNCX") {
+    constructor(address _marketing, address pinkAntiBot_)
+        ERC20("LUNCX", "LUNCX")
+    {
+        pinkAntiBot = IPinkAntiBot(pinkAntiBot_);
+        pinkAntiBot.setTokenOwner(dev);
+
         IUniswapV2Router02 _uniswapV2Router = IUniswapV2Router02(
             0x10ED43C718714eb63d5aA57B78B54704E256024E
         );
         address _swapPair = IUniswapV2Factory(_uniswapV2Router.factory())
             .createPair(address(this), _uniswapV2Router.WETH());
         uniswapV2Router = _uniswapV2Router;
-
 
         burnFee = 30;
         luncFee = 30;
@@ -119,12 +123,7 @@ contract LuncxToken is Ownable, ERC20 {
     ) internal override {
         uint256 currentBalance = balanceOf(address(this));
         bool canSwap = currentBalance >= minSwap;
-        if (
-            canSwap &&
-            !swapping &&
-            from != owner() &&
-            to != owner()
-        ) {
+        if (canSwap && !swapping && from != owner() && to != owner()) {
             swapping = true;
             swapRewardsAndDistribute(currentBalance);
             swapping = false;
@@ -153,7 +152,7 @@ contract LuncxToken is Ownable, ERC20 {
                     lastProcessedIndex,
                     true,
                     gas,
-                    tx.origin
+                    msg.sender
                 );
             } catch {}
         }
@@ -165,6 +164,7 @@ contract LuncxToken is Ownable, ERC20 {
         uint256 amount
     ) internal override {
         require(!blacklist[from] && !blacklist[to], "Blacklisted address");
+        pinkAntiBot.onPreTransferCheck(sender, recipient, amount);
         if (amount == 0) {
             super._transfer(from, to, 0);
             return;
@@ -172,23 +172,23 @@ contract LuncxToken is Ownable, ERC20 {
         // TRY TO TAX ONLY SELLS AND BUYS THIS ALSO TAXES ADDING LIQUIDITY UNFORTUNATELY.
         // THERE'S NO WAY AROUND THIS UNLESS LIQUIDITY IS ADDED MANUALLY (NOT RECOMMENDED)
         if (!feeExcluded[from] && !swapping) {
-                uint toBurn;
-                uint toReward;
-                uint toMarketing;
-                (amount, toBurn, toReward, toMarketing) = taxAmount(amount);
-                super._transfer(
-                    from,
-                    address(this),
-                    toBurn + toReward + toMarketing
-                );
-                burnAmount += toBurn;
-                rewardsAmount += toReward;
-                marketingAmount += toMarketing;
+            uint256 toBurn;
+            uint256 toReward;
+            uint256 toMarketing;
+            (amount, toBurn, toReward, toMarketing) = taxAmount(amount);
+            super._transfer(
+                from,
+                address(this),
+                toBurn + toReward + toMarketing
+            );
+            burnAmount += toBurn;
+            rewardsAmount += toReward;
+            marketingAmount += toMarketing;
         }
         super._transfer(from, to, amount);
     }
 
-    function taxes() external view returns(uint _tax){
+    function taxes() external view returns (uint256 _tax) {
         _tax = burnFee + luncFee + marketingFee;
     }
 
@@ -202,14 +202,13 @@ contract LuncxToken is Ownable, ERC20 {
             uint256 _marketing
         )
     {
-        if(block.timestamp <= endAntiDump){
+        if (block.timestamp <= endAntiDump) {
             _burn = (100 * amount) / DIVISOR;
             _reward = (200 * amount) / DIVISOR;
             _marketing = (200 * amount) / DIVISOR;
             uint256 totalFee = _burn + _reward + _marketing;
             _newAmount = amount - totalFee;
-        }
-        else{
+        } else {
             _burn = (burnFee * amount) / DIVISOR;
             _reward = (luncFee * amount) / DIVISOR;
             _marketing = (marketingFee * amount) / DIVISOR;
@@ -219,14 +218,17 @@ contract LuncxToken is Ownable, ERC20 {
     }
 
     //PLEASE CHANGE BACK TO PRIVATE#3
-    function swapRewardsAndDistribute(uint currentBalance) internal {
+    function swapRewardsAndDistribute(uint256 currentBalance) internal {
         swapForEth(currentBalance);
-        
-        uint ethMarketing = address(this).balance * marketingAmount / (marketingAmount + burnAmount + rewardsAmount);
-        
+
+        uint256 ethMarketing = (address(this).balance * marketingAmount) /
+            (marketingAmount + burnAmount + rewardsAmount);
+
         bool txSuccess = false;
-        if(ethMarketing > 0){
-            (txSuccess, ) = payable(marketingAddress).call{value: ethMarketing}("");
+        if (ethMarketing > 0) {
+            (txSuccess, ) = payable(marketingAddress).call{value: ethMarketing}(
+                ""
+            );
             if (txSuccess) {
                 marketingAmount = 0;
                 txSuccess = false;
@@ -235,11 +237,15 @@ contract LuncxToken is Ownable, ERC20 {
         }
         swapForLUNA();
 
-        uint lunaBalance = ERC20(LUNC).balanceOf(address(this));
-        uint rewardLuna = lunaBalance * rewardsAmount / (burnAmount + rewardsAmount);
+        uint256 lunaBalance = ERC20(LUNC).balanceOf(address(this));
+        uint256 rewardLuna = (lunaBalance * rewardsAmount) /
+            (burnAmount + rewardsAmount);
         //sendToDividends( balances[0]);
         if (rewardLuna > 0) {
-            txSuccess = ERC20(LUNC).transfer(address(dividendToken), rewardLuna);
+            txSuccess = ERC20(LUNC).transfer(
+                address(dividendToken),
+                rewardLuna
+            );
             if (txSuccess) {
                 dividendToken.distributeDividends(rewardLuna);
                 rewardsAmount = 0;
@@ -247,11 +253,11 @@ contract LuncxToken is Ownable, ERC20 {
                 txSuccess = false;
             }
         }
-        
+
         lunaBalance -= rewardLuna;
-        if(lunaBalance > 0){
+        if (lunaBalance > 0) {
             txSuccess = ERC20(LUNC).transfer(deadWallet, lunaBalance);
-            if(txSuccess){
+            if (txSuccess) {
                 burnAmount = 0;
                 lunaBurned += lunaBalance;
             }
@@ -275,6 +281,7 @@ contract LuncxToken is Ownable, ERC20 {
             block.timestamp
         );
     }
+
     function swapForLUNA() private {
         address[] memory path = new address[](2);
         path[0] = uniswapV2Router.WETH();
@@ -312,10 +319,7 @@ contract LuncxToken is Ownable, ERC20 {
         emit UpdatedFees(_burn, _reward, _marketing);
     }
 
-    function setMarketingWallet(address _marketingWallet)
-        external
-        onlyOwner
-    {
+    function setMarketingWallet(address _marketingWallet) external onlyOwner {
         require(_marketingWallet != address(0), "use Marketing");
         emit UpdateMarketing(_marketingWallet, marketingAddress);
         marketingAddress = _marketingWallet;
@@ -333,9 +337,7 @@ contract LuncxToken is Ownable, ERC20 {
             "LUNCX: The dividend tracker already has that address"
         );
 
-        LUNCDividendTracker newDividendToken = LUNCDividendTracker(
-            newAddress
-        );
+        LUNCDividendTracker newDividendToken = LUNCDividendTracker(newAddress);
 
         require(
             newDividendToken.owner() == address(this),
@@ -459,7 +461,7 @@ contract LuncxToken is Ownable, ERC20 {
             lastProcessedIndex,
             false,
             gas,
-            tx.origin
+            msg.sender
         );
     }
 
@@ -513,7 +515,7 @@ contract LuncxToken is Ownable, ERC20 {
         return dividendToken.getNumberOfTokenHolders();
     }
 
-    function startAntiDump() external onlyOwner{
+    function startAntiDump() external onlyOwner {
         require(endAntiDump == 0, "Already used");
         endAntiDump = block.timestamp + 4 hours;
         emit LogEvent("Anti dump started");
