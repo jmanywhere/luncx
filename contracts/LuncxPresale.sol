@@ -17,7 +17,7 @@ contract TokenPresale is Ownable, ReentrancyGuard {
 
     uint256 public constant BUY_INTERVAL = 0.01 ether;
 
-    uint256 public open_for_all; // timestamp of when can people join
+    bool public open_for_all; // timestamp of when can people join
 
     IERC20 public TOKEN;
     uint256 public totalRaise;
@@ -41,7 +41,7 @@ contract TokenPresale is Ownable, ReentrancyGuard {
         require(!endSale, "Sale ended");
         require(_amount % BUY_INTERVAL == 0, "Only intervals of 0.01 BNB");
         UserInfo storage user = userInfo[msg.sender];
-        require(user.whitelisted || open_for_all > 0, "Only whitelist");
+        require(user.whitelisted || open_for_all, "Only whitelist");
         totalRaise += _amount;
         user.bought += _amount;
 
