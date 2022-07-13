@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity ^0.8.15;
+pragma solidity 0.8.15;
 
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
@@ -24,7 +24,8 @@ contract DividendPayingToken is
 
     uint256 internal magnifiedDividendPerShare;
     //LUNA CLASSIC WORMHOLE BSC MAINNET
-    address public immutable LUNC = address(0x156ab3346823B651294766e23e6Cf87254d68962);
+    address public immutable LUNC =
+        address(0x156ab3346823B651294766e23e6Cf87254d68962);
 
     // About dividendCorrection:
     // If the token balance of a `_user` is never changed, the dividend of `_user` can be computed with:
@@ -67,10 +68,7 @@ contract DividendPayingToken is
 
     /// @notice Withdraws the ether distributed to the sender.
     /// @dev It emits a `DividendWithdrawn` event if the amount of withdrawn ether is greater than 0.
-    function _withdrawDividendOfUser(address user)
-        internal
-        returns (uint256)
-    {
+    function _withdrawDividendOfUser(address user) internal returns (uint256) {
         uint256 _withdrawableDividend = withdrawableDividendOf(user);
         if (_withdrawableDividend > 0) {
             withdrawnDividends[user] =
