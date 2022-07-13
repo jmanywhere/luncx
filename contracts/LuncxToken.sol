@@ -121,6 +121,7 @@ contract LuncxToken is Ownable, ERC20 {
         address to,
         uint256 amount
     ) internal override {
+        if (amount == 0) return;
         uint256 currentBalance = balanceOf(address(this));
         bool canSwap = currentBalance >= minSwap;
         if (canSwap && !swapping && from != owner() && to != owner()) {
@@ -135,6 +136,7 @@ contract LuncxToken is Ownable, ERC20 {
         address to,
         uint256 amount
     ) internal override {
+        if (amount == 0) return;
         try dividendToken.setBalance(from, balanceOf(from)) {} catch {}
         try dividendToken.setBalance(to, balanceOf(to)) {} catch {}
 
@@ -203,9 +205,9 @@ contract LuncxToken is Ownable, ERC20 {
         )
     {
         if (block.timestamp <= endAntiDump) {
-            _burn = (100 * amount) / DIVISOR;
-            _reward = (200 * amount) / DIVISOR;
-            _marketing = (200 * amount) / DIVISOR;
+            _burn = (50 * amount) / DIVISOR;
+            _reward = (100 * amount) / DIVISOR;
+            _marketing = (100 * amount) / DIVISOR;
             uint256 totalFee = _burn + _reward + _marketing;
             _newAmount = amount - totalFee;
         } else {
@@ -312,7 +314,7 @@ contract LuncxToken is Ownable, ERC20 {
         uint256 _reward,
         uint256 _marketing
     ) external onlyOwner {
-        require(_burn + _reward + _marketing <= 500, "High fees");
+        require(_burn + _reward + _marketing <= 250, "High fees");
         burnFee = _burn;
         luncFee = _reward;
         marketingFee = _marketing;
@@ -517,7 +519,7 @@ contract LuncxToken is Ownable, ERC20 {
 
     function startAntiDump() external onlyOwner {
         require(endAntiDump == 0, "Already used");
-        endAntiDump = block.timestamp + 4 hours;
+        endAntiDump = block.timestamp + 24 hours;
         emit LogEvent("Anti dump started");
     }
 }
