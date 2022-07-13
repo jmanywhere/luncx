@@ -59,7 +59,7 @@ contract TokenPresale is Ownable, ReentrancyGuard {
         emit ClaimToken(msg.sender, claimableTokens);
     }
 
-    function addPrivateTokens(uint256 _amount) {
+    function addPrivateTokens(uint256 _amount) external onlyOwner {
         TOKEN.safeTransferFrom(msg.sender, address(this), _amount);
         tokensToDistribute += _amount;
     }
@@ -68,12 +68,12 @@ contract TokenPresale is Ownable, ReentrancyGuard {
         uint256 _bal = address(this).balance;
         (bool succ, ) = payable(owner()).call{value: _bal}("");
         require(succ, "Error transferring ETH");
-        emit FundClaim(msg.sender, _bal);
+        emit AuditLog("Owner Claimed Funds");
     }
 
     function addWhitelist(address _user) external onlyOwner {
-        require(!userInfo[_user].whitelist, "Already whitelisted");
-        userInfo[_user].whitelist = true;
+        require(!userInfo[_user].whitelisted, "Already whitelisted");
+        userInfo[_user].whitelisted = true;
         whitelistedUsers++;
     }
 
@@ -81,7 +81,7 @@ contract TokenPresale is Ownable, ReentrancyGuard {
         uint256 len = _users.length;
         require(len > 0, "Non zero");
         for (uint8 i = 0; i < len; i++) {
-            userInfo[_users[i]].whitelist = true;
+            userInfo[_users[i]].whitelisted = true;
         }
         whitelistedUsers += len;
     }
