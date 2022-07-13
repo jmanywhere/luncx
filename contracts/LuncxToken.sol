@@ -361,8 +361,6 @@ contract LuncxToken is Ownable, ERC20 {
         );
         emit UpdateUniswapV2Router(newAddress, address(uniswapV2Router));
         uniswapV2Router = IUniswapV2Router02(newAddress);
-        address _uniswapV2Pair = IUniswapV2Factory(uniswapV2Router.factory())
-            .createPair(address(this), uniswapV2Router.WETH());
     }
 
     /// @notice Excludes address from fees
