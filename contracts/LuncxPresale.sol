@@ -13,6 +13,8 @@ contract TokenPresale is Ownable, ReentrancyGuard {
         uint256 bought;
         bool claimed;
         bool whitelisted;
+        address referrer;
+        uint256 referrals;
     }
 
     uint256 public constant BUY_INTERVAL = 0.01 ether;
@@ -23,6 +25,7 @@ contract TokenPresale is Ownable, ReentrancyGuard {
     uint256 public totalRaise;
     uint256 public whitelistedUsers;
     uint256 public totalBuyers;
+    uint256 public immutable MAX_BUY;
     bool public claimable;
     bool public endSale;
     uint256 public tokensToDistribute;
@@ -36,12 +39,35 @@ contract TokenPresale is Ownable, ReentrancyGuard {
 
     receive() external payable {}
 
-    function buyToken() external payable nonReentrant {
+    constructor(address _token, uint256 _max) {
+        require(
+            _token != address(0) && _max % BUY_INTERVAL == 0,
+            "invalid params"
+        );
+        TOKEN = IERC20(_token);
+        MAX_BUY = _max;
+    }
+
+    function buyToken(address referrer) external payable nonReentrant {
         uint256 _amount = msg.value;
         require(!endSale, "Sale ended");
-        require(_amount % BUY_INTERVAL == 0, "Only intervals of 0.01 BNB");
         UserInfo storage user = userInfo[msg.sender];
+        if (
+            (referrer != address(0) && user.referrer == address(0)) ||
+            referrer == owner()
+        ) {
+            require(userInfo[referrer].bought > 0, "Invalid referrer");
+            userInfo[referrer].referrals++;
+            user.referrer = referrer;
+        }
+        require(
+            user.bought + _amount >= 0.1 ether &&
+                _amount % BUY_INTERVAL == 0 &&
+                user.bought + _amount <= MAX_BUY,
+            "Invalid Value Amount"
+        );
         require(user.whitelisted || open_for_all, "Only whitelist");
+        if (user.bought == 0) totalBuyers++;
         totalRaise += _amount;
         user.bought += _amount;
 
@@ -80,7 +106,7 @@ contract TokenPresale is Ownable, ReentrancyGuard {
     function whitelistMultiple(address[] calldata _users) external onlyOwner {
         uint256 len = _users.length;
         require(len > 0, "Non zero");
-        for (uint8 i = 0; i < len; i++) {
+        for (uint256 i = 0; i < len; i++) {
             userInfo[_users[i]].whitelisted = true;
         }
         whitelistedUsers += len;
@@ -97,6 +123,8 @@ contract TokenPresale is Ownable, ReentrancyGuard {
     }
 
     function tokensClaimable() external onlyOwner {
+        require(endSale, "Sale running");
+        require(tokensToDistribute > 0, "No tokens yet");
         claimable = true;
         emit AuditLog("Tokens Claimable");
     }
